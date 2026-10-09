@@ -14,7 +14,12 @@ Frontend: HTML5, CSS (usando bootstrap 5), JavaScript
 - Trate sempre as mensagens nativas "ex, caixas de mensagens com OK" sempre em um modal.
 
 ### regras de negócio CORE
-senhas devem ser armazenadas com hash seguro
+- A cor do background do site vai ser preto
+- O site vai ter abas
+- Usuario fornecer uma URL valida
+- A URL não pode exceder 2.953 caracteres alfanuméricos
+- Os pontos escuros do qr code e a cor do fundo devem ter um contraste
+- Ao ler o qr code ele deve te mandar a url anexada durante a presonalização do qr code
 
 #### Obejetivos
 Criar o sistema que gera Qr code personalizados de forma rapida, facil e gratuita
