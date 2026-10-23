@@ -1,0 +1,333 @@
+/**
+ * Folha de Estilos Customizada - Gerador de QR Code Automático
+ * Regra CORE: Fundo 100% Preto (#000000) e Mobile-First com Bootstrap 5
+ */
+
+:root {
+    --bg-main: #000000;
+    --card-bg: #0d0f14;
+    --card-surface: #141720;
+    --border-color: rgba(255, 255, 255, 0.12);
+    --border-focus: #3b82f6;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --accent-blue: #3b82f6;
+    --accent-cyan: #06b6d4;
+    --accent-green: #10b981;
+}
+
+/* Background preto absoluto conforme requisito core */
+body {
+    background-color: var(--bg-main) !important;
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.backdrop-blur {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+/* Cartões do Sistema */
+.card-dark {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-dark:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.card-header-clean {
+    background: transparent;
+    border-bottom: 1px solid var(--border-color);
+    padding: 1.25rem 1.5rem;
+}
+
+/* Abas Customizadas */
+.nav-tabs-custom {
+    border-bottom: 1px solid var(--border-color);
+    gap: 0.5rem;
+}
+
+.nav-tabs-custom .nav-link {
+    color: var(--text-secondary);
+    border: 1px solid transparent;
+    border-radius: 0.65rem 0.65rem 0 0;
+    padding: 0.75rem 1.15rem;
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nav-tabs-custom .nav-link:hover {
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.15) rgba(255, 255, 255, 0.15) transparent;
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.nav-tabs-custom .nav-link.active {
+    color: #ffffff !important;
+    background-color: var(--card-bg) !important;
+    border-color: var(--border-color) var(--border-color) transparent !important;
+    border-top: 3px solid var(--accent-blue) !important;
+    font-weight: 600;
+}
+
+/* Inputs e Controles de Formulário */
+.form-control-dark,
+.form-select-dark {
+    background-color: #050608 !important;
+    border: 1px solid var(--border-color) !important;
+    color: #ffffff !important;
+    border-radius: 0.65rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+
+.form-control-dark:focus,
+.form-select-dark:focus {
+    background-color: #080a0f !important;
+    border-color: var(--border-focus) !important;
+    box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25) !important;
+    color: #ffffff !important;
+}
+
+.form-control-dark::placeholder {
+    color: #64748b;
+}
+
+.input-group-text-dark {
+    background-color: #141720;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+}
+
+/* Indicador de Caracteres Restantes */
+.char-counter {
+    font-size: 0.8rem;
+    transition: color 0.2s ease;
+}
+
+.char-counter.warning {
+    color: #f59e0b !important;
+}
+
+.char-counter.danger {
+    color: #ef4444 !important;
+    font-weight: bold;
+}
+
+/* Seletor de Cores e Presets */
+.color-swatch-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    padding: 0;
+    cursor: pointer;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.color-swatch-btn:hover {
+    transform: scale(1.15);
+    border-color: #ffffff;
+}
+
+.color-swatch-btn.active {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+    transform: scale(1.1);
+}
+
+.color-picker-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.color-picker-input {
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    background: transparent;
+    padding: 2px;
+    cursor: pointer;
+}
+
+.color-picker-input::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-picker-input::-webkit-color-swatch {
+    border: none;
+    border-radius: 0.4rem;
+}
+
+/* Barra e Medidor de Contraste WCAG */
+.contrast-badge-box {
+    background-color: var(--card-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 0.9rem 1.15rem;
+}
+
+.contrast-meter {
+    height: 8px;
+    background: #1e293b;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.contrast-meter-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+/* Área de Pré-Visualização do QR Code */
+.preview-container {
+    background: #050608;
+    border: 2px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 1rem;
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    position: relative;
+    transition: border-color 0.2s ease;
+}
+
+.preview-container.has-code {
+    border-style: solid;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+#qrcodeCanvasWrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    background: transparent;
+    transition: all 0.2s ease;
+    max-width: 100%;
+}
+
+#qrcodeCanvasWrapper img,
+#qrcodeCanvasWrapper canvas,
+#qrcodeCanvasWrapper svg {
+    max-width: 100% !important;
+    height: auto !important;
+    border-radius: 0.5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    display: block;
+}
+
+/* Botões do Sistema */
+.btn-primary-gradient {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border: none;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 0.85rem 1.5rem;
+    border-radius: 0.65rem;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    transition: all 0.2s ease;
+}
+
+.btn-primary-gradient:hover:not(:disabled) {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+    transform: translateY(-1px);
+    color: #ffffff;
+}
+
+.btn-primary-gradient:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Cards do Histórico */
+.history-item {
+    background-color: var(--card-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    transition: all 0.2s ease;
+}
+
+.history-item:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+    background-color: #171b26;
+}
+
+.history-thumbnail {
+    width: 64px;
+    height: 64px;
+    border-radius: 0.5rem;
+    background: #ffffff;
+    padding: 4px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+/* Badges e utilitários */
+.badge-contrast-high {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-contrast-med {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-contrast-low {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Loading Spinner */
+.spinner-pulse {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.96); }
+}
+
+/* Responsividade Mobile-First */
+@media (max-width: 767.98px) {
+    .nav-tabs-custom .nav-link {
+        padding: 0.6rem 0.8rem;
+        font-size: 0.85rem;
+    }
+    
+    .card-header-clean {
+        padding: 1rem;
+    }
+    
+    .preview-container {
+        min-height: 260px;
+        padding: 1rem;
+    }
+}
