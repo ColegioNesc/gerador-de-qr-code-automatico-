@@ -149,6 +149,28 @@ body {
     transform: scale(1.1);
 }
 
+.swatch-transparent {
+    background:
+        linear-gradient(135deg, #000000 50%, transparent 50%),
+        repeating-conic-gradient(#cbd5e1 0% 25%, #ffffff 0% 50%) 50% / 10px 10px;
+}
+
+.swatch-transparent-light {
+    background:
+        linear-gradient(135deg, #ffffff 50%, transparent 50%),
+        repeating-conic-gradient(#334155 0% 25%, #0f172a 0% 50%) 50% / 10px 10px;
+}
+
+.bg-checkerboard {
+    background-image: repeating-conic-gradient(#cbd5e1 0% 25%, #f8fafc 0% 50%) !important;
+    background-size: 16px 16px !important;
+}
+
+.bg-checkerboard-dark {
+    background-image: repeating-conic-gradient(#334155 0% 25%, #1e293b 0% 50%) !important;
+    background-size: 16px 16px !important;
+}
+
 .color-picker-wrapper {
     position: relative;
     display: flex;

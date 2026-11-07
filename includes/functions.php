@@ -97,3 +97,125 @@ function validateUrlInput(string $url): array
 
     return ['valid' => true, 'url' => $url];
 }
+
+/**
+ * Renderiza o QR Code em PNG ou SVG respeitando rigorosamente as cores personalizadas (RGB para GD / HEX para SVG)
+ * e suportando fundo 100% transparente ($bgColor === 'transparent').
+ */
+function renderQrCodeOutput(
+    string $content,
+    string $fgColor = '#000000',
+    string $bgColor = '#FFFFFF',
+    int $size = 350,
+    string $format = 'png',
+    string $ecc = 'M',
+    bool $asDataUri = false
+): string {
+    require_once __DIR__ . '/../vendor/autoload.php';
+
+    $isTransparent = (strtolower(trim($bgColor)) === 'transparent');
+    $fgColor = sanitizeHexColor($fgColor, '#000000');
+    $bgColor = $isTransparent ? 'transparent' : sanitizeHexColor($bgColor, '#FFFFFF');
+    $size    = max(150, min(1000, $size));
+    $format  = strtolower($format) === 'svg' ? 'svg' : 'png';
+    $ecc     = strtoupper($ecc);
+
+    $eccMap = [
+        'L' => \chillerlan\QRCode\QRCode::ECC_L,
+        'M' => \chillerlan\QRCode\QRCode::ECC_M,
+        'Q' => \chillerlan\QRCode\QRCode::ECC_Q,
+        'H' => \chillerlan\QRCode\QRCode::ECC_H,
+    ];
+    $eccLevel = $eccMap[$ecc] ?? \chillerlan\QRCode\QRCode::ECC_M;
+
+    $fgRgb = hexToRgb($fgColor);
+    if ($isTransparent) {
+        // Escolhe uma cor-chave diferente da cor dos pontos para transparência exata no GD
+        $bgRgb = ($fgRgb === [255, 0, 255]) ? [0, 255, 0] : [255, 0, 255];
+    } else {
+        $bgRgb = hexToRgb($bgColor);
+    }
+
+    $darkValue  = ($format === 'svg') ? $fgColor : $fgRgb;
+    $lightValue = ($format === 'svg') ? ($isTransparent ? 'none' : $bgColor) : $bgRgb;
+
+    $moduleColors = [];
+    foreach (\chillerlan\QRCode\Output\QROutputInterface::DEFAULT_MODULE_VALUES as $mType => $isDark) {
+        $moduleColors[$mType] = $isDark ? $darkValue : $lightValue;
+    }
+
+    $scale = max(3, (int)round($size / 35));
+
+    $optionsData = [
+        'version'           => \chillerlan\QRCode\QRCode::VERSION_AUTO,
+        'eccLevel'          => $eccLevel,
+        'bgColor'           => ($format === 'svg') ? ($isTransparent ? null : $bgColor) : $bgRgb,
+        'moduleValues'      => $moduleColors,
+        'drawLightModules'  => !$isTransparent,
+        'imageTransparent'  => $isTransparent,
+        'transparencyColor' => $isTransparent ? $bgRgb : null,
+        'scale'             => $scale,
+        'outputBase64'      => false,
+    ];
+
+    if ($format === 'svg') {
+        $optionsData['outputType']           = \chillerlan\QRCode\QRCode::OUTPUT_MARKUP_SVG;
+        $optionsData['svgUseFillAttributes'] = true;
+    } else {
+        $optionsData['outputType'] = \chillerlan\QRCode\QRCode::OUTPUT_IMAGE_PNG;
+    }
+
+    $options = new \chillerlan\QRCode\QROptions($optionsData);
+    $rawOutput = (new \chillerlan\QRCode\QRCode($options))->render($content);
+
+    if ($format === 'svg') {
+        $svgAttrs = $isTransparent
+            ? sprintf('<svg width="%d" height="%d"', $size, $size)
+            : sprintf('<svg width="%d" height="%d" style="background-color:%s"', $size, $size, $bgColor);
+
+        $rawOutput = preg_replace('/<svg\b/i', $svgAttrs, $rawOutput, 1) ?? $rawOutput;
+    }
+
+    if ($asDataUri) {
+        $mime = ($format === 'svg') ? 'image/svg+xml' : 'image/png';
+        return sprintf('data:%s;base64,%s', $mime, base64_encode($rawOutput));
+    }
+
+    return $rawOutput;
+}
+
+/**
+ * Remove automaticamente do banco e do disco os QR Codes expirados (padrão: mais de 7 dias).
+ */
+function cleanupExpiredQrCodes(\PDO $pdo, int $retentionDays = 7): void
+{
+    try {
+        $retentionDays = max(1, $retentionDays);
+        $stmt = $pdo->prepare("
+            SELECT code_uuid, file_path
+            FROM qr_codes
+            WHERE created_at < DATE_SUB(NOW(), INTERVAL :days DAY)
+            LIMIT 100
+        ");
+        $stmt->execute([':days' => $retentionDays]);
+        $expired = $stmt->fetchAll();
+
+        if (empty($expired)) {
+            return;
+        }
+
+        $generatedDir = realpath(__DIR__ . '/../generated');
+        foreach ($expired as $row) {
+            $uuid = (string)($row['code_uuid'] ?? '');
+            if ($generatedDir && preg_match('/^[a-fA-F0-9]{32}$/', $uuid)) {
+                @unlink($generatedDir . '/' . $uuid . '.png');
+                @unlink($generatedDir . '/' . $uuid . '.svg');
+            }
+        }
+
+        $delStmt = $pdo->prepare("DELETE FROM qr_codes WHERE created_at < DATE_SUB(NOW(), INTERVAL :days DAY)");
+        $delStmt->execute([':days' => $retentionDays]);
+    } catch (\Throwable $e) {
+        error_log('Aviso na limpeza automática de histórico: ' . $e->getMessage());
+    }
+}

@@ -7,6 +7,14 @@
 declare(strict_types=1);
 
 if (session_status() === PHP_SESSION_NONE) {
+    $cookieLifetime = 7 * 86400; // 7 dias
+    @ini_set('session.gc_maxlifetime', (string)$cookieLifetime);
+    session_set_cookie_params([
+        'lifetime' => $cookieLifetime,
+        'path'     => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
     session_start();
 }
 ?>

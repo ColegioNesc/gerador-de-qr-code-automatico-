@@ -15,6 +15,7 @@ require_once __DIR__ . '/../includes/functions.php';
 use chillerlan\QRCode\QRCode;
 use chillerlan\QRCode\QROptions;
 use chillerlan\QRCode\Data\QRMatrix;
+use chillerlan\QRCode\Output\QROutputInterface;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -31,38 +32,36 @@ try {
         $payload = $_POST;
     }
 
-    $contentType = trim((string)($payload['content_type'] ?? 'url'));
-    $fgColor     = sanitizeHexColor((string)($payload['fg_color'] ?? '#000000'), '#000000');
-    $bgColor     = sanitizeHexColor((string)($payload['bg_color'] ?? '#ffffff'), '#ffffff');
-    $size        = max(150, min(1000, (int)($payload['size'] ?? 350)));
-    $format      = strtolower((string)($payload['format'] ?? 'png'));
-    $ecc         = strtoupper((string)($payload['ecc'] ?? 'M'));
+    $contentType   = trim((string)($payload['content_type'] ?? 'url'));
+    $fgColor       = sanitizeHexColor((string)($payload['fg_color'] ?? '#000000'), '#000000');
+    $rawBgColor    = trim((string)($payload['bg_color'] ?? '#ffffff'));
+    $bgTransparent = !empty($payload['bg_transparent']) || strtolower($rawBgColor) === 'transparent';
+    $bgColor       = $bgTransparent ? 'transparent' : sanitizeHexColor($rawBgColor, '#ffffff');
+    $size          = max(150, min(1000, (int)($payload['size'] ?? 350)));
+    $format        = strtolower((string)($payload['format'] ?? 'png'));
+    $ecc           = strtoupper((string)($payload['ecc'] ?? 'M'));
 
     if (!in_array($format, ['png', 'svg'], true)) {
         $format = 'png';
     }
 
-    $eccMap = [
-        'L' => QRCode::ECC_L,
-        'M' => QRCode::ECC_M,
-        'Q' => QRCode::ECC_Q,
-        'H' => QRCode::ECC_H,
-    ];
-    $eccLevel = $eccMap[$ecc] ?? QRCode::ECC_M;
-
-    // Regra de Negócio CORE: Cálculo do contraste entre pontos escuros e o fundo
-    $contrastRatio = calculateContrastRatio($fgColor, $bgColor);
-    if ($contrastRatio < 3.00) {
-        http_response_code(422);
-        echo json_encode([
-            'success' => false,
-            'error'   => sprintf(
-                'Contraste insuficiente (taxa calculada: %.2f:1). Para garantir que o QR Code seja lido corretamente pelas câmeras, escolha cores com maior contraste (mínimo de 3.0:1).',
-                $contrastRatio
-            ),
-            'contrast_ratio' => $contrastRatio
-        ]);
-        exit;
+    // Regra de Negócio CORE: Cálculo do contraste entre pontos escuros e o fundo (exceto quando o fundo é transparente)
+    if ($bgTransparent) {
+        $contrastRatio = 21.00;
+    } else {
+        $contrastRatio = calculateContrastRatio($fgColor, $bgColor);
+        if ($contrastRatio < 3.00) {
+            http_response_code(422);
+            echo json_encode([
+                'success' => false,
+                'error'   => sprintf(
+                    'Contraste insuficiente (taxa calculada: %.2f:1). Para garantir que o QR Code seja lido corretamente pelas câmeras, escolha cores com maior contraste (mínimo de 3.0:1).',
+                    $contrastRatio
+                ),
+                'contrast_ratio' => $contrastRatio
+            ]);
+            exit;
+        }
     }
 
     // Processamento e validação conforme a aba/tipo
@@ -136,63 +135,24 @@ try {
             exit;
     }
 
-    // Configuração dos módulos para colorização precisa
-    $moduleColors = [
-        QRMatrix::M_DARKMODULE     => $fgColor,
-        QRMatrix::M_DATA_DARK      => $fgColor,
-        QRMatrix::M_FINDER_DARK    => $fgColor,
-        QRMatrix::M_ALIGNMENT_DARK => $fgColor,
-        QRMatrix::M_TIMING_DARK    => $fgColor,
-        QRMatrix::M_FORMAT_DARK    => $fgColor,
-        QRMatrix::M_VERSION_DARK   => $fgColor,
-        QRMatrix::M_DATA           => $bgColor,
-        QRMatrix::M_FINDER         => $bgColor,
-        QRMatrix::M_ALIGNMENT      => $bgColor,
-        QRMatrix::M_TIMING         => $bgColor,
-        QRMatrix::M_FORMAT         => $bgColor,
-        QRMatrix::M_VERSION        => $bgColor,
-        QRMatrix::M_QUIETZONE      => $bgColor,
-        QRMatrix::M_SEPARATOR      => $bgColor,
-    ];
+    // Renderiza PNG e SVG com as cores personalizadas (RGB no GD / HEX no SVG)
+    $pngRaw = renderQrCodeOutput($finalContent, $fgColor, $bgColor, $size, 'png', $ecc, false);
+    $svgRaw = renderQrCodeOutput($finalContent, $fgColor, $bgColor, $size, 'svg', $ecc, false);
 
-    $scale = max(3, (int)round($size / 35));
+    $pngDataUri = 'data:image/png;base64,' . base64_encode($pngRaw);
+    $svgDataUri = 'data:image/svg+xml;base64,' . base64_encode($svgRaw);
+    $renderedDataUri = ($format === 'svg') ? $svgDataUri : $pngDataUri;
 
-    $optionsData = [
-        'version'         => QRCode::VERSION_AUTO,
-        'eccLevel'        => $eccLevel,
-        'bgColor'         => $bgColor,
-        'moduleValues'    => $moduleColors,
-        'scale'           => $scale,
-        'imageBase64'     => true,
-    ];
-
-    if ($format === 'svg') {
-        $optionsData['outputType'] = QRCode::OUTPUT_MARKUP_SVG;
-        $optionsData['svgUseFillColor'] = true;
-    } else {
-        $optionsData['outputType'] = QRCode::OUTPUT_IMAGE_PNG;
-    }
-
-    $options = new QROptions($optionsData);
-    $qrcodeInstance = new QRCode($options);
-    $renderedDataUri = $qrcodeInstance->render($finalContent);
-
-    // Identificador único e persistência do arquivo em disco
+    // Identificador único e persistência dos arquivos (PNG e SVG) em disco
     $uuid = bin2hex(random_bytes(16));
     $generatedDir = __DIR__ . '/../generated';
-    $fileName = sprintf('%s.%s', $uuid, $format);
-    $filePath = $generatedDir . '/' . $fileName;
-
-    if ($format === 'svg') {
-        // Gera SVG puro para download
-        $svgRawOptions = new QROptions(array_merge($optionsData, ['imageBase64' => false]));
-        $svgRaw = (new QRCode($svgRawOptions))->render($finalContent);
-        file_put_contents($filePath, $svgRaw);
-    } else {
-        // Decodifica Base64 PNG e salva arquivo binário
-        $pngBinary = base64_decode(preg_replace('#^data:image/\w+;base64,#i', '', $renderedDataUri));
-        file_put_contents($filePath, $pngBinary);
+    if (!is_dir($generatedDir)) {
+        @mkdir($generatedDir, 0755, true);
     }
+
+    $fileName = sprintf('%s.%s', $uuid, $format);
+    @file_put_contents($generatedDir . '/' . $uuid . '.png', $pngRaw);
+    @file_put_contents($generatedDir . '/' . $uuid . '.svg', $svgRaw);
 
     // Persistência segura no MySQL via PDO
     $pdo = getDbConnection();
@@ -240,6 +200,8 @@ try {
         'success'        => true,
         'uuid'           => $uuid,
         'qr_data_uri'    => $renderedDataUri,
+        'png_data_uri'   => $pngDataUri,
+        'svg_data_uri'   => $svgDataUri,
         'download_url'   => 'api/download.php?uuid=' . $uuid,
         'contrast_ratio' => $contrastRatio,
         'content'        => $finalContent,

@@ -217,6 +217,8 @@ require_once __DIR__ . '/includes/toast.php';
                                 <button type="button" class="color-swatch-btn" data-fg="#10b981" data-bg="#04140c" title="Matrix Green: Verde Esmeralda no Fundo Escuro" style="background: linear-gradient(135deg, #10b981 50%, #04140c 50%);"></button>
                                 <button type="button" class="color-swatch-btn" data-fg="#f59e0b" data-bg="#120c03" title="Gold Elegance: Dourado no Fundo Preto" style="background: linear-gradient(135deg, #f59e0b 50%, #120c03 50%);"></button>
                                 <button type="button" class="color-swatch-btn" data-fg="#a855f7" data-bg="#10051a" title="Purple Tech: Púrpura no Fundo Profundo" style="background: linear-gradient(135deg, #a855f7 50%, #10051a 50%);"></button>
+                                <button type="button" class="color-swatch-btn swatch-transparent" data-fg="#000000" data-bg="transparent" title="Transparente Escuro: Pontos Pretos em Fundo Transparente"></button>
+                                <button type="button" class="color-swatch-btn swatch-transparent-light" data-fg="#ffffff" data-bg="transparent" title="Transparente Claro: Pontos Brancos em Fundo Transparente"></button>
                             </div>
                         </div>
 
@@ -232,10 +234,18 @@ require_once __DIR__ . '/includes/toast.php';
                                 </div>
                             </div>
                             <div class="col-12 col-sm-6">
-                                <label for="bgColor" class="form-label text-light fw-semibold small">
-                                    Cor do Fundo (Background) <span class="text-danger">*</span>
-                                </label>
-                                <div class="color-picker-wrapper">
+                                <div class="d-flex align-items-center justify-content-between mb-2">
+                                    <label for="bgColor" class="form-label text-light fw-semibold small mb-0">
+                                        Cor do Fundo (Background) <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="form-check form-switch mb-0">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="checkBgTransparent" name="bg_transparent">
+                                        <label class="form-check-label text-info small fw-semibold" for="checkBgTransparent" title="Remove o fundo do QR Code para sobrepor na sua arte">
+                                            Fundo Transparente
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="color-picker-wrapper" id="bgColorPickerWrapper">
                                     <input type="color" class="color-picker-input" id="bgColor" name="bg_color" value="#ffffff">
                                     <input type="text" class="form-control form-control-dark font-monospace text-uppercase" id="bgColorHex" value="#FFFFFF" maxlength="7">
                                 </div>
@@ -372,7 +382,7 @@ require_once __DIR__ . '/includes/toast.php';
                         <i class="bi bi-clock-history text-primary"></i> Seus QR Codes Recentes
                         <span class="badge bg-secondary rounded-pill" id="historyCountBadge">0</span>
                     </h3>
-                    <small class="text-secondary">Itens gerados na sua sessão atual (sem necessidade de login).</small>
+                    <small class="text-secondary">Itens gerados neste navegador (mantidos automaticamente por 7 dias).</small>
                 </div>
                 <button type="button" class="btn btn-outline-danger btn-sm" id="btnClearHistory" disabled>
                     <i class="bi bi-trash3 me-1"></i> Limpar Histórico

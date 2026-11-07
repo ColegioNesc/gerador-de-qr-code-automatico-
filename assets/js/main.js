@@ -173,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const fgColorHex = document.getElementById('fgColorHex');
     const bgColorInput = document.getElementById('bgColor');
     const bgColorHex = document.getElementById('bgColorHex');
+    const checkBgTransparent = document.getElementById('checkBgTransparent');
     const btnInvertColors = document.getElementById('btnInvertColors');
     const sizeSelect = document.getElementById('sizeSelect');
     const formatSelect = document.getElementById('formatSelect');
@@ -291,8 +292,32 @@ document.addEventListener('DOMContentLoaded', () => {
         return hex.toUpperCase();
     }
 
+    function isBgTransparent() {
+        return Boolean(checkBgTransparent && checkBgTransparent.checked);
+    }
+
+    function syncTransparentInputsUI() {
+        const transparent = isBgTransparent();
+        if (bgColorInput) bgColorInput.disabled = transparent;
+        if (bgColorHex) {
+            bgColorHex.disabled = transparent;
+            bgColorHex.value = transparent ? 'TRANSPARENTE' : bgColorInput.value.toUpperCase();
+        }
+    }
+
     function updateContrastUI() {
         const fg = fgColorInput.value;
+
+        if (isBgTransparent()) {
+            contrastRatioValue.textContent = 'Transparente';
+            contrastMeterFill.style.width = '100%';
+            contrastMeterFill.style.backgroundColor = '#06b6d4';
+            contrastStatusBadge.className = 'badge badge-contrast-high';
+            contrastStatusBadge.innerHTML = '<i class="bi bi-grid-3x3 me-1"></i> Fundo Transparente (Garanta contraste na sua arte)';
+            contrastAlertBox.classList.add('d-none');
+            return 21.0;
+        }
+
         const bg = bgColorInput.value;
         const ratio = calculateContrastRatio(fg, bg);
 
@@ -352,9 +377,21 @@ document.addEventListener('DOMContentLoaded', () => {
     bindColorSync(fgColorInput, fgColorHex);
     bindColorSync(bgColorInput, bgColorHex);
 
+    if (checkBgTransparent) {
+        checkBgTransparent.addEventListener('change', () => {
+            syncTransparentInputsUI();
+            updateContrastUI();
+            scheduleLivePreview();
+        });
+    }
+
     // Inverter Cores
     if (btnInvertColors) {
         btnInvertColors.addEventListener('click', () => {
+            if (isBgTransparent()) {
+                checkBgTransparent.checked = false;
+                syncTransparentInputsUI();
+            }
             const temp = fgColorInput.value;
             fgColorInput.value = bgColorInput.value;
             fgColorHex.value = bgColorInput.value.toUpperCase();
@@ -377,9 +414,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             fgColorInput.value = fg;
             fgColorHex.value = fg.toUpperCase();
-            bgColorInput.value = bg;
-            bgColorHex.value = bg.toUpperCase();
 
+            if (bg === 'transparent') {
+                if (checkBgTransparent) checkBgTransparent.checked = true;
+            } else {
+                if (checkBgTransparent) checkBgTransparent.checked = false;
+                bgColorInput.value = bg;
+                bgColorHex.value = bg.toUpperCase();
+            }
+
+            syncTransparentInputsUI();
             updateContrastUI();
             scheduleLivePreview();
         });
@@ -442,19 +486,40 @@ document.addEventListener('DOMContentLoaded', () => {
     // 8. PRÉ-VISUALIZAÇÃO EM TEMPO REAL (JS)
     // ==========================================
 
+    let isFormDirty = true;
+
+    if (sizeSelect) sizeSelect.addEventListener('change', () => { isFormDirty = true; });
+    if (formatSelect) formatSelect.addEventListener('change', () => { isFormDirty = true; });
+    if (eccSelect) eccSelect.addEventListener('change', () => { isFormDirty = true; });
+
     function scheduleLivePreview() {
+        isFormDirty = true;
         if (livePreviewTimeout) clearTimeout(livePreviewTimeout);
         livePreviewTimeout = setTimeout(triggerLivePreview, 150);
     }
 
+    function applyPreviewBackgroundStyle(fgHex, transparent, bgHex) {
+        qrcodeCanvasWrapper.classList.remove('bg-checkerboard', 'bg-checkerboard-dark');
+        if (transparent) {
+            qrcodeCanvasWrapper.style.backgroundColor = 'transparent';
+            const lum = calculateRelativeLuminance(fgHex);
+            qrcodeCanvasWrapper.classList.add(lum > 0.5 ? 'bg-checkerboard-dark' : 'bg-checkerboard');
+        } else {
+            qrcodeCanvasWrapper.style.backgroundColor = bgHex;
+        }
+    }
+
     function triggerLivePreview() {
+        isFormDirty = true;
         const data = getFormattedContent();
         const fg = fgColorInput.value;
         const bg = bgColorInput.value;
+        const transparent = isBgTransparent();
 
         if (!data.valid) {
             previewPlaceholder.classList.remove('d-none');
             qrcodeCanvasWrapper.innerHTML = '';
+            qrcodeCanvasWrapper.classList.remove('bg-checkerboard', 'bg-checkerboard-dark');
             qrcodeCanvasWrapper.style.backgroundColor = 'transparent';
             previewWrapper.classList.remove('has-code');
             previewActions.classList.add('d-none');
@@ -463,8 +528,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         previewPlaceholder.classList.add('d-none');
         qrcodeCanvasWrapper.innerHTML = '';
-        qrcodeCanvasWrapper.style.backgroundColor = bg;
+        applyPreviewBackgroundStyle(fg, transparent, bg);
         previewWrapper.classList.add('has-code');
+        previewActions.classList.remove('d-none');
 
         try {
             // Biblioteca client-side QRCode (assets/vendor/qrcode.min.js)
@@ -473,7 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 width: 250,
                 height: 250,
                 colorDark: fg,
-                colorLight: bg,
+                colorLight: transparent ? 'rgba(0,0,0,0)' : bg,
                 correctLevel: QRCode.CorrectLevel.M
             });
 
@@ -494,29 +560,62 @@ document.addEventListener('DOMContentLoaded', () => {
     // 9. SUBMISSÃO E GERAÇÃO NO SERVIDOR
     // ==========================================
 
-    formGenerate.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    function triggerDataUriDownload(dataUri, filename) {
+        try {
+            const parts = dataUri.split(',');
+            const meta = parts[0] || '';
+            const base64Data = parts[1] || '';
+            const mimeMatch = meta.match(/data:([^;]+);/);
+            const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
 
+            const byteChars = atob(base64Data);
+            const byteNumbers = new Uint8Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) {
+                byteNumbers[i] = byteChars.charCodeAt(i);
+            }
+
+            const blob = new Blob([byteNumbers], { type: mime });
+            const blobUrl = URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+        } catch (err) {
+            console.error('Erro ao iniciar download via Blob:', err);
+            showToast('Não foi possível iniciar o download do arquivo.', 'danger');
+        }
+    }
+
+    async function generateQrOnServer(silentToast = false) {
         const dataCheck = getFormattedContent();
         if (!dataCheck.valid) {
             showToast(dataCheck.error, 'danger');
-            return;
+            return null;
         }
 
-        const ratio = calculateContrastRatio(fgColorInput.value, bgColorInput.value);
-        if (ratio < 3.0) {
-            showToast(
-                `Contraste muito baixo (${ratio.toFixed(2)}:1). Ajuste as cores para um contraste mínimo de 3.0:1 antes de gerar.`,
-                'warning'
-            );
-            return;
+        const transparent = isBgTransparent();
+        if (!transparent) {
+            const ratio = calculateContrastRatio(fgColorInput.value, bgColorInput.value);
+            if (ratio < 3.0) {
+                showToast(
+                    `Contraste muito baixo (${ratio.toFixed(2)}:1). Ajuste as cores para um contraste mínimo de 3.0:1 antes de gerar.`,
+                    'warning'
+                );
+                return null;
+            }
         }
 
         // Prepara payload
         const payload = {
             content_type: activeTab,
             fg_color: fgColorInput.value,
-            bg_color: bgColorInput.value,
+            bg_color: transparent ? 'transparent' : bgColorInput.value,
+            bg_transparent: transparent,
             size: parseInt(sizeSelect.value, 10) || 350,
             format: formatSelect.value || 'png',
             ecc: eccSelect.value || 'M'
@@ -552,16 +651,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok || !result.success) {
                 showToast(result.error || 'Erro ao gerar QR Code no servidor.', 'danger');
-                return;
+                return null;
             }
 
             // Sucesso!
             lastGeneratedData = result;
-            showToast('QR Code gerado com sucesso!', 'success');
+            isFormDirty = false;
+            if (!silentToast) {
+                showToast('QR Code gerado com sucesso!', 'success');
+            }
 
             // Renderiza imagem oficial de alta resolução
             qrcodeCanvasWrapper.innerHTML = '';
-            qrcodeCanvasWrapper.style.backgroundColor = payload.bg_color;
+            applyPreviewBackgroundStyle(payload.fg_color, transparent, payload.bg_color);
 
             const qrImg = document.createElement('img');
             qrImg.src = result.qr_data_uri;
@@ -570,10 +672,10 @@ document.addEventListener('DOMContentLoaded', () => {
             qrcodeCanvasWrapper.appendChild(qrImg);
 
             // Atualiza botões de Download e Ações
-            btnDownloadPng.href = `api/download.php?uuid=${result.uuid}`;
+            btnDownloadPng.href = `api/download.php?uuid=${result.uuid}&format=png`;
             btnDownloadPng.setAttribute('download', `qrcode-${result.uuid.substring(0, 8)}.png`);
 
-            btnDownloadSvg.href = `api/download.php?uuid=${result.uuid}`;
+            btnDownloadSvg.href = `api/download.php?uuid=${result.uuid}&format=svg`;
             btnDownloadSvg.setAttribute('download', `qrcode-${result.uuid.substring(0, 8)}.svg`);
 
             previewActions.classList.remove('d-none');
@@ -581,14 +683,48 @@ document.addEventListener('DOMContentLoaded', () => {
             // Atualiza Histórico da Sessão
             loadHistory();
 
+            return result;
+
         } catch (err) {
             console.error('Erro na requisição à API:', err);
             showToast('Falha na comunicação com o servidor. Verifique sua conexão.', 'danger');
+            return null;
         } finally {
             btnSubmit.disabled = false;
             btnSubmit.innerHTML = originalBtnHtml;
         }
+    }
+
+    formGenerate.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await generateQrOnServer(false);
     });
+
+    if (btnDownloadPng) {
+        btnDownloadPng.addEventListener('click', async (e) => {
+            e.preventDefault();
+            let data = (!isFormDirty && lastGeneratedData) ? lastGeneratedData : await generateQrOnServer(true);
+            if (!data) return;
+            const dataUri = data.png_data_uri || data.qr_data_uri;
+            const filename = `qrcode-${String(data.uuid || 'gerado').substring(0, 8)}.png`;
+            if (dataUri) {
+                triggerDataUriDownload(dataUri, filename);
+            }
+        });
+    }
+
+    if (btnDownloadSvg) {
+        btnDownloadSvg.addEventListener('click', async (e) => {
+            e.preventDefault();
+            let data = (!isFormDirty && lastGeneratedData) ? lastGeneratedData : await generateQrOnServer(true);
+            if (!data) return;
+            const dataUri = data.svg_data_uri || data.qr_data_uri;
+            const filename = `qrcode-${String(data.uuid || 'gerado').substring(0, 8)}.svg`;
+            if (dataUri) {
+                triggerDataUriDownload(dataUri, filename);
+            }
+        });
+    }
 
     // ==========================================
     // 10. AÇÕES DO RESULTADO (COPIAR E TESTAR)
@@ -611,6 +747,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // 11. HISTÓRICO DE QR CODES DA SESSÃO
     // ==========================================
+
+    const FALLBACK_THUMBNAIL_URI = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' fill='%236c757d' viewBox='0 0 16 16'%3E%3Cpath d='M0 .5A.5.5 0 0 1 .5 0h7a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-7z'/%3E%3C/svg%3E";
+
+    function escapeHtml(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
 
     async function loadHistory() {
         if (!historyList) return;
@@ -640,34 +787,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
             historyList.innerHTML = items.map(item => {
                 const isUrl = (item.content_type === 'url' || item.content_type === 'whatsapp');
-                const truncatedContent = item.content_data.length > 50 
-                    ? item.content_data.substring(0, 50) + '...' 
-                    : item.content_data;
+                const rawContent = String(item.content_data || '');
+                const truncatedContent = rawContent.length > 50 
+                    ? rawContent.substring(0, 50) + '...' 
+                    : rawContent;
+                const ext = item.format === 'svg' ? 'svg' : 'png';
+                const downloadFilename = `qrcode-${String(item.uuid || '').substring(0, 8)}.${ext}`;
+                const previewSrc = item.preview_url || `api/download.php?uuid=${encodeURIComponent(item.uuid)}&inline=1`;
+                const isItemTransparent = String(item.bg_color || '').toLowerCase() === 'transparent';
+                const thumbCheckerClass = isItemTransparent
+                    ? (calculateRelativeLuminance(item.fg_color || '#000000') > 0.5 ? 'bg-checkerboard-dark' : 'bg-checkerboard')
+                    : '';
 
                 return `
                     <div class="col-12 col-md-6 col-lg-4">
                         <div class="history-item d-flex gap-3 align-items-center">
-                            <img src="${item.preview_url || 'assets/vendor/bootstrap-icons.min.css'}" 
+                            <img src="${escapeHtml(previewSrc)}" 
                                  alt="Miniatura" 
-                                 class="history-thumbnail"
-                                 onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'64\' height=\'64\' fill=\'%236c757d\' viewBox=\'0 0 16 16\'><path d=\'M0 .5A.5.5 0 0 1 .5 0h7a.5.5 0 0 1 .5.5v7a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-7z\'/></svg>'">
+                                 class="history-thumbnail ${thumbCheckerClass}"
+                                 data-fallback="${escapeHtml(FALLBACK_THUMBNAIL_URI)}"
+                                 onerror="this.onerror=null;this.src=this.getAttribute('data-fallback');">
                             
                             <div class="flex-grow-1 overflow-hidden">
                                 <div class="d-flex align-items-center justify-content-between mb-1">
                                     <span class="badge bg-secondary bg-opacity-25 text-light text-uppercase font-monospace" style="font-size: 0.65rem;">
-                                        ${item.content_type}
+                                        ${escapeHtml(item.content_type)}
                                     </span>
-                                    <small class="text-secondary" style="font-size: 0.7rem;">${item.created_at}</small>
+                                    <small class="text-secondary" style="font-size: 0.7rem;">${escapeHtml(item.created_at)}</small>
                                 </div>
-                                <p class="text-white small mb-2 text-truncate" title="${item.content_data}">
-                                    ${truncatedContent}
+                                <p class="text-white small mb-2 text-truncate" title="${escapeHtml(rawContent)}">
+                                    ${escapeHtml(truncatedContent)}
                                 </p>
                                 <div class="d-flex gap-2">
-                                    <a href="${item.download_url}" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size: 0.75rem;" title="Baixar">
+                                    <a href="${escapeHtml(item.download_url)}"
+                                       download="${escapeHtml(downloadFilename)}"
+                                       data-data-uri="${escapeHtml(item.qr_data_uri || '')}"
+                                       data-filename="${escapeHtml(downloadFilename)}"
+                                       class="btn btn-outline-primary btn-sm py-0 px-2 btn-history-download"
+                                       style="font-size: 0.75rem;"
+                                       title="Baixar">
                                         <i class="bi bi-download me-1"></i> Baixar
                                     </a>
                                     ${isUrl ? `
-                                        <a href="${item.content_data}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;" title="Abrir Link">
+                                        <a href="${escapeHtml(rawContent)}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;" title="Abrir Link">
                                             <i class="bi bi-box-arrow-up-right"></i>
                                         </a>
                                     ` : ''}
@@ -681,6 +843,19 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error('Erro ao carregar histórico:', err);
         }
+    }
+
+    if (historyList) {
+        historyList.addEventListener('click', (e) => {
+            const btn = e.target.closest('.btn-history-download');
+            if (!btn) return;
+            const dataUri = btn.getAttribute('data-data-uri');
+            const filename = btn.getAttribute('data-filename') || 'qrcode.png';
+            if (dataUri && dataUri.startsWith('data:')) {
+                e.preventDefault();
+                triggerDataUriDownload(dataUri, filename);
+            }
+        });
     }
 
     // Limpar Histórico com Modal

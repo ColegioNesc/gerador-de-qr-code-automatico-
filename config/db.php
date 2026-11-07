@@ -6,7 +6,18 @@
 
 declare(strict_types=1);
 
+// Retenção padrão do histórico anônimo (em dias)
+define('QR_HISTORY_RETENTION_DAYS', 7);
+
 if (session_status() === PHP_SESSION_NONE) {
+    $cookieLifetime = QR_HISTORY_RETENTION_DAYS * 86400; // 7 dias
+    @ini_set('session.gc_maxlifetime', (string)$cookieLifetime);
+    session_set_cookie_params([
+        'lifetime' => $cookieLifetime,
+        'path'     => '/',
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
     session_start();
 }
 
